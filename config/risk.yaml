@@ -1,0 +1,30 @@
+risk_deductions:
+  fill_level:
+    Into-Neck: 0.00
+    High-Shoulder: 0.05
+    Mid-Shoulder: 0.10
+  capsule:
+    Pristine: 0.00
+    Scuffed: 0.02
+    Torn/Seepage: 0.08
+  label:
+    Pristine: 0.00
+    Bin-Soiled: 0.02
+    Torn: 0.04
+  seepage:
+    No: 0.00
+    Yes: 0.07
+  storage:
+    "Provenance Known": 0.00
+    "Unknown/Questionable": 0.05
+  mold:
+    No: 0.00
+    Yes: 0.07
+
+drinkability_adjustment:
+  "Prime Now": 0.03
+  "Neutral": 0.00
+  "Early (Needs Time)": -0.03
+  "Late (Drink Up)": -0.05
+
+target_discount_default: 0.12

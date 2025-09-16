@@ -1,0 +1,32 @@
+auction_houses:
+  - name: "Acker"
+    buyers_premium: 0.26
+    last_verified: "2025-09-01"
+    source_url: "https://www.ackerwines.com/terms-and-conditions/"
+    parse:
+      regex: "(?i)buyer'?s premium[^\\d%]*([12][0-9])\\s?%"
+      multiplier: 0.01
+
+  - name: "Spectrum"
+    buyers_premium: 0.25
+    last_verified: "2025-09-01"
+    source_url: "https://www.spectrumwine.com/terms"
+    parse:
+      regex: "(?i)buyer'?s premium[^\\d%]*([12][0-9])\\s?%"
+      multiplier: 0.01
+
+  - name: "WineBid"
+    buyers_premium: 0.20
+    last_verified: "2025-09-01"
+    source_url: "https://www.winebid.com/Help/Policies"
+    parse:
+      regex: "(?i)buyer'?s premium[^\\d%]*([01]?\\d|2[0-9])\\s?%"
+      multiplier: 0.01
+
+  - name: "iDealwine"
+    buyers_premium: 0.195
+    last_verified: "2025-09-01"
+    source_url: "https://www.idealwine.com/uk/auctions/rules-and-terms.jsp"
+    parse:
+      regex: "(?i)buyer'?s premium[^\\d%]*([01]?\\d|2[0-9])\\s?%"
+      multiplier: 0.01

@@ -1,0 +1,24 @@
+name: Validate Fees Nightly
+
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm i -D tsx typescript js-yaml undici cheerio @types/cheerio
+      - run: npx tsx scripts/validate-fees.ts
+      - name: Commit changes if any
+        run: |
+          git config user.name "fees-bot"
+          git config user.email "fees-bot@example.com"
+          git add config/fees.yaml
+          git diff --quiet || git commit -m "chore: update buyers premiums (auto)"
+          git push
