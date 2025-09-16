@@ -1,4 +1,4 @@
-name: Validate Auction Fees Nightly
+name: Fees Validator (no-commit)
 on:
   schedule:
     - cron: "17 7 * * *"  # daily at 07:17 UTC
