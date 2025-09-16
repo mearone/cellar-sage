@@ -1,8 +1,10 @@
 name: Fees Validator (no-commit)
+
 on:
   schedule:
-    - cron: "17 7 * * *"  # daily at 07:17 UTC
+    - cron: '17 7 * * *'   # daily at 07:17 UTC
   workflow_dispatch: {}
+
 permissions:
   contents: read
 
@@ -16,29 +18,17 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Debug: show files
-        run: |
-          pwd
-          ls -la
-          ls -la scripts || true
-
       - name: Install deps for script
         run: npm i -D tsx typescript undici cheerio @supabase/supabase-js
 
-      - name: Debug: node & tsx
-        run: |
-          node -v
-          npx tsx --version
-
-      - name: Debug: check required env present
+      - name: Check required env present
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
-          test -n "$SUPABASE_URL" || (echo "SUPABASE_URL missing" && exit 1)
-          test -n "$SUPABASE_SERVICE_ROLE_KEY" || (echo "SUPABASE_SERVICE_ROLE_KEY missing" && exit 1)
-          echo "Env looks ok"
+          if [ -z "${SUPABASE_URL}" ]; then echo "SUPABASE_URL missing" && exit 1; fi
+          if [ -z "${SUPABASE_SERVICE_ROLE_KEY}" ]; then echo "SUPABASE_SERVICE_ROLE_KEY missing" && exit 1; fi
+          echo "Env looks OK"
 
       - name: Run validator
         env:
