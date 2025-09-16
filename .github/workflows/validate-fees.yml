@@ -1,24 +1,48 @@
-name: Validate Fees Nightly
-
+name: Validate Auction Fees Nightly
 on:
   schedule:
-    - cron: "17 6 * * *"
+    - cron: "17 7 * * *"  # daily at 07:17 UTC
   workflow_dispatch: {}
+permissions:
+  contents: read
 
 jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
-      - run: npm i -D tsx typescript js-yaml undici cheerio @types/cheerio
-      - run: npx tsx scripts/validate-fees.ts
-      - name: Commit changes if any
+          node-version: '20'
+
+      - name: Debug: show files
         run: |
-          git config user.name "fees-bot"
-          git config user.email "fees-bot@example.com"
-          git add config/fees.yaml
-          git diff --quiet || git commit -m "chore: update buyers premiums (auto)"
-          git push
+          pwd
+          ls -la
+          ls -la scripts || true
+
+      - name: Install deps for script
+        run: npm i -D tsx typescript undici cheerio @supabase/supabase-js
+
+      - name: Debug: node & tsx
+        run: |
+          node -v
+          npx tsx --version
+
+      - name: Debug: check required env present
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          test -n "$SUPABASE_URL" || (echo "SUPABASE_URL missing" && exit 1)
+          test -n "$SUPABASE_SERVICE_ROLE_KEY" || (echo "SUPABASE_SERVICE_ROLE_KEY missing" && exit 1)
+          echo "Env looks ok"
+
+      - name: Run validator
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: npx tsx scripts/validate-fees-supabase.ts
