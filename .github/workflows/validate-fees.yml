@@ -11,6 +11,8 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+
     steps:
       - uses: actions/checkout@v4
 
@@ -18,21 +20,23 @@ jobs:
         with:
           node-version: '20'
 
+      # Only the script deps we actually need
       - name: Install deps for script
-        run: npm i -D tsx typescript undici cheerio @supabase/supabase-js
+        run: npm i -D tsx typescript cheerio @supabase/supabase-js
 
       - name: Check required env present
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          if [ -z "${SUPABASE_URL}" ]; then echo "SUPABASE_URL missing" && exit 1; fi
-          if [ -z "${SUPABASE_SERVICE_ROLE_KEY}" ]; then echo "SUPABASE_SERVICE_ROLE_KEY missing" && exit 1; fi
+          [ -z "${SUPABASE_URL}" ] && echo "SUPABASE_URL missing" && exit 1 || true
+          [ -z "${SUPABASE_SERVICE_ROLE_KEY}" ] && echo "SUPABASE_SERVICE_ROLE_KEY missing" && exit 1 || true
           echo "Env looks OK"
 
       - name: Run validator
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}   # optional
+          ZENROWS_API_KEY: ${{ secrets.ZENROWS_API_KEY }}       # 👈 new
         run: npx tsx scripts/validate-fees-supabase.ts
