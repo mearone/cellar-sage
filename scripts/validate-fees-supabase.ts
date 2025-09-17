@@ -1,3 +1,5 @@
+console.log("Using Supabase URL:", process.env.SUPABASE_URL);
+
 // @ts-nocheck
 import { createClient } from '@supabase/supabase-js';
 import * as cheerio from 'cheerio';
