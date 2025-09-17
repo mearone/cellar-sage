@@ -8,6 +8,13 @@ const YESNO = ["No","Yes"] as const;
 const STORAGE = ["Provenance Known","Unknown/Questionable"] as const;
 const DRINK = ["Prime Now","Neutral","Early (Needs Time)","Late (Drink Up)"] as const;
 
+// Minimal destination list (expand anytime)
+const COUNTRIES = [
+  "US","UK","FR","DE","ES","IT","NL","BE","LU","DK","SE","FI",
+  "IE","PT","AT","PL","CZ","HU","RO","BG","HR","SI","SK","GR",
+  "EE","LV","LT"
+] as const;
+
 type Result = {
   preFeeMax: number;
   maxBid: number;
@@ -40,8 +47,15 @@ export default function BidCapForm() {
     auction_house: "",
     retail_anchor_usd: 150,
     shipping_usd: 25,
-    sales_tax_rate: 0.095,
+    sales_tax_rate: 0.095,     // used when auto_tax = false
     target_discount: 0.12,
+
+    // NEW: destination tax inputs
+    shipping_country: "US" as (typeof COUNTRIES)[number],
+    shipping_zip: "",
+    auto_tax: false,
+
+    // Risk/condition
     fill_level: "Into-Neck",
     capsule: "Pristine",
     label: "Pristine",
@@ -187,14 +201,58 @@ export default function BidCapForm() {
         />
       </InputRow>
 
-      <InputRow label="Sales Tax (decimal)">
-        <input
-          type="number"
-          step="0.0001"
+      {/* NEW: Destination country */}
+      <InputRow label="Ship Country">
+        <select
           className="w-full border rounded p-2"
-          value={state.sales_tax_rate}
-          onChange={(e) => setState(s => ({...s, sales_tax_rate: parseFloat(e.target.value)}))}
+          value={state.shipping_country}
+          onChange={(e) => setState(s => ({...s, shipping_country: e.target.value as typeof s.shipping_country}))}
+        >
+          {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+      </InputRow>
+
+      {/* NEW: ZIP / Postal */}
+      <InputRow label="Ship ZIP / Postal">
+        <input
+          className="w-full border rounded p-2"
+          value={state.shipping_zip}
+          onChange={(e) => setState(s => ({...s, shipping_zip: e.target.value}))}
+          placeholder={state.shipping_country === "US" ? "e.g., 94105" : "e.g., W1A 1AA"}
         />
+      </InputRow>
+
+      {/* NEW: Auto Tax toggle */}
+      <InputRow label="Auto Tax (beta)">
+        <div className="flex items-center gap-3">
+          <input
+            id="auto-tax"
+            type="checkbox"
+            checked={state.auto_tax}
+            onChange={(e) => setState(s => ({...s, auto_tax: e.target.checked}))}
+          />
+          <label htmlFor="auto-tax" className="text-sm text-gray-700">
+            If on, we’ll choose VAT vs. US sales tax based on the destination country.
+          </label>
+        </div>
+      </InputRow>
+
+      <InputRow label="Sales Tax (decimal)">
+        <div>
+          <input
+            type="number"
+            step="0.0001"
+            className="w-full border rounded p-2 disabled:bg-gray-100 disabled:text-gray-500"
+            value={state.sales_tax_rate}
+            disabled={state.auto_tax}
+            onChange={(e) => setState(s => ({...s, sales_tax_rate: parseFloat(e.target.value)}))}
+          />
+          <p className="text-xs text-gray-500 mt-1">
+            {state.auto_tax
+              ? "Auto Tax is on: this field is ignored."
+              : "Enter your local sales tax as a decimal, e.g., 0.095 for 9.5%."}
+          </p>
+        </div>
       </InputRow>
 
       <InputRow label="Target Discount (decimal)">
