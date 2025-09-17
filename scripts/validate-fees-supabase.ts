@@ -105,11 +105,17 @@ const HOUSES: House[] = [
   },
   {
     name: "iDealwine",
-    // Prefer ex-VAT figure (e.g., “21% excluding VAT”)
     url: "https://www.idealwine.com/en/corporate/conditions_generales",
     parse: (t) => {
-      const excl = pctNear(t, /(excl|excluding)/i);
-      return excl ?? pctNear(t, /buyer'?s premium/i) ?? firstPct(t);
+      // Strong preference for ex-VAT figure
+      const ex1 = matchPct(t, /(\d{1,2}(?:\.\d)?)\s?%\s*(excl|excluding)\s+VAT/i); // e.g., 21% excluding VAT
+      if (ex1 != null) return ex1;
+      const ex2 = matchPct(t, /(\d{1,2}(?:\.\d)?)\s?%\s*(HT|hors\s*taxe)/i);        // FR: 21% HT
+      if (ex2 != null) return ex2;
+      // Fallback: first % near "buyer’s premium"
+      const near = pctNear(t, /buyer'?s premium/i);
+      if (near != null) return near;
+      return firstPct(t);
     },
   },
 ];
