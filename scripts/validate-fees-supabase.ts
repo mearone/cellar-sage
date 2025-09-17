@@ -1,4 +1,7 @@
+console.log("Validator VERSION: v3");
 console.log("Using Supabase URL:", process.env.SUPABASE_URL);
+
+function isPlausible(p: number) { return p >= 0.05 && p <= 0.35; }
 
 // @ts-nocheck
 import { createClient } from '@supabase/supabase-js';
@@ -16,8 +19,8 @@ type House = {
 const HOUSES: House[] = [
   {
     name: "Acker",
-    url: "https://www.ackerwines.com/terms-conditions/",
-    parse: (t) => captureFirstPct(t, /buyer'?s premium/i),
+    url: "https://www.ackerwines.com/faq/",
+    parse: (t) => pctNear(t, /buyer'?s premium/i),
   },
   {
     name: "Spectrum",
@@ -26,9 +29,8 @@ const HOUSES: House[] = [
   },
   {
     name: "WineBid",
-    // “A 17% buyer’s premium is added …”
-    url: "https://www.winebid.com/FrequentlyAskedQuestions",
-    parse: (t) => captureFirstPct(t, /buyer'?s premium/i),
+    url: "https://www.winebid.com/Help/Payment",
+    parse: (t) => pctNear(t, /buyer'?s premium/i) ?? firstPct(t),
   },
   {
     name: "iDealwine",
@@ -122,52 +124,46 @@ async function main() {
   const summary: string[] = [];
   let failures = 0;
 
-  for (const h of HOUSES) {
-    console.log(`\n=== ${h.name} ===`);
+  for (const h of houses) {
+    console.log(`=== ${h.name} ===`);
+    console.log(`DB → buyers_premium=${row?.buyers_premium} last_verified=${row?.last_verified}`);
+  
     try {
-      const { data: rows, error: selErr } = await sb
-        .from("fees")
-        .select("id, house, buyers_premium, last_verified, source_url")
-        .eq("house", h.name)
-        .limit(1);
-      if (selErr) throw selErr;
-      const current = rows?.[0];
-      if (!current) { summary.push(`⚠️ ${h.name}: no DB row`); continue; }
-      console.log(`DB → buyers_premium=${current.buyers_premium} last_verified=${current.last_verified}`);
-
-      const html = await getText(h.url);
-      const $ = cheerio.load(html);
-      const text = $.text().replace(/\s+/g, " ");
-
+      const text = await fetchText(h.url);
       const scraped = h.parse(text);
-      if (scraped == null) {
-        console.warn(`Parse FAIL for ${h.name} (first 200 chars: ${text.slice(0,200)}…)`);
-        summary.push(`❌ ${h.name}: parse failed`);
+  
+      if (!scraped) {
+        console.warn(`${h.name} parse failed`);
+        summary.push(`⚠️ ${h.name}: parse failed`);
         failures++;
         continue;
       }
-      console.log(`Scraped → ${scraped * 100}% from ${h.url}`);
-
-      if (Math.abs((current.buyers_premium ?? 0) - scraped) > 1e-6) {
-        console.log(`Updating ${h.name}: ${current.buyers_premium} → ${scraped}`);
-        const { error: updErr } = await sb
-          .from("fees")
-          .update({ buyers_premium: scraped, last_verified: todayISO(), source_url: h.url })
-          .eq("id", current.id);
-        if (updErr) throw updErr;
-        summary.push(`✏️ ${h.name}: ${current.buyers_premium} → ${scraped}`);
+  
+      // 🔹 INSERT GUARD HERE
+      if (!isPlausible(scraped)) {
+        console.warn(`Scraped value ${scraped} out of plausible range; skipping update.`);
+        summary.push(`🚧 ${h.name}: scraped ${scraped * 100}% out-of-range; no update`);
+        failures++;
+        continue;
+      }
+  
+      if (Math.abs(scraped - row.buyers_premium) > 0.001) {
+        console.log(`Updating ${h.name}: ${row.buyers_premium} → ${scraped}`);
+        await supabase.from("fees").update({
+          buyers_premium: scraped,
+          last_verified: new Date().toISOString().slice(0, 10),
+        }).eq("house", h.name);
+        summary.push(`✏️ ${h.name}: ${row.buyers_premium} → ${scraped}`);
       } else {
-        const { error: updErr2 } = await sb
-          .from("fees")
-          .update({ last_verified: todayISO(), source_url: h.url })
-          .eq("id", current.id);
-        if (updErr2) throw updErr2;
-        console.log(`Unchanged. last_verified bumped to ${todayISO()}`);
+        console.log(`Unchanged. last_verified bumped to today`);
+        await supabase.from("fees").update({
+          last_verified: new Date().toISOString().slice(0, 10),
+        }).eq("house", h.name);
         summary.push(`✅ ${h.name}: unchanged at ${scraped}`);
       }
     } catch (e: any) {
-      console.error(`🔥 ${h.name} error:`, e?.message ?? e);
-      summary.push(`🔥 ${h.name}: ${e?.message ?? "error"}`);
+      console.error(`🔥 ${h.name} error: ${e.message}`);
+      summary.push(`🔥 ${h.name}: ${e.message}`);
       failures++;
     }
   }
