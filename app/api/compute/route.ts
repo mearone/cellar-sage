@@ -3,40 +3,52 @@ import { NextRequest, NextResponse } from "next/server";
 import { computeBidCap } from "@/lib/bidcap";
 import { supabaseServer } from "@/lib/supabase";
 
-// ---- Inline risk & drinkability (mirrors your DB seeds) ----
+// Ensure Node runtime on Vercel (uses server-only libs/env)
+export const runtime = "nodejs";
+
+// ---- Inline risk & drinkability shaped to match RiskYaml ----
 const RISK = {
-  fill_level: {
-    "Into-Neck": 0.00,
-    "High-Shoulder": 0.05,
-    "Mid-Shoulder": 0.10,
+  risk_deductions: {
+    fill_level: {
+      "Into-Neck": 0.0,
+      "High-Shoulder": 0.05,
+      "Mid-Shoulder": 0.1,
+    },
+    capsule: {
+      Pristine: 0.0,
+      Scuffed: 0.02,
+      "Torn/Seepage": 0.08,
+    },
+    label: {
+      Pristine: 0.0,
+      "Bin-Soiled": 0.02,
+      Torn: 0.04,
+    },
+    seepage: {
+      No: 0.0,
+      Yes: 0.07,
+    },
+    storage: {
+      "Provenance Known": 0.0,
+      "Unknown/Questionable": 0.05,
+    },
+    mold: {
+      No: 0.0,
+      Yes: 0.07,
+    },
+    oxidation: {
+      None: 0.0,
+      "Light Browning": 0.05,
+      "Severe Browning": 0.15,
+    },
   },
-  capsule: {
-    "Pristine": 0.00,
-    "Scuffed": 0.02,
-    "Torn/Seepage": 0.08,
-  },
-  label: {
-    "Pristine": 0.00,
-    "Bin-Soiled": 0.02,
-    "Torn": 0.04,
-  },
-  seepage: {
-    "No": 0.00,
-    "Yes": 0.07,
-  },
-  storage: {
-    "Provenance Known": 0.00,
-    "Unknown/Questionable": 0.05,
-  },
-  mold: {
-    "No": 0.00,
-    "Yes": 0.07,
-  },
-  drinkability: {
-    "Prime Now": 0.03,
-    "Neutral": 0.00,
-    "Early (Needs Time)": -0.03,
-    "Late (Drink Up)": -0.05,
+  drinkability_adjustment: {
+    drinkability: {
+      "Prime Now": 0.03,
+      Neutral: 0.0,
+      "Early (Needs Time)": -0.03,
+      "Late (Drink Up)": -0.05,
+    },
   },
 } as const;
 
@@ -44,14 +56,14 @@ const RISK = {
 const EU = new Set([
   "FR","DE","ES","IT","NL","BE","LU","DK","SE","FI",
   "IE","PT","AT","PL","CZ","HU","RO","BG","HR","SI","SK","GR",
-  "EE","LV","LT"
+  "EE","LV","LT",
 ]);
 
 const VAT: Record<string, number> = {
   FR: 0.20, DE: 0.19, ES: 0.21, IT: 0.22, NL: 0.21, BE: 0.21, LU: 0.17,
   DK: 0.25, SE: 0.25, FI: 0.24, IE: 0.23, PT: 0.23, AT: 0.20, PL: 0.23,
   CZ: 0.21, HU: 0.27, RO: 0.19, BG: 0.20, HR: 0.25, SI: 0.22, SK: 0.20,
-  GR: 0.24, EE: 0.22, LV: 0.21, LT: 0.21
+  GR: 0.24, EE: 0.22, LV: 0.21, LT: 0.21,
 };
 
 export async function POST(req: NextRequest) {
@@ -109,11 +121,11 @@ export async function POST(req: NextRequest) {
       {} // we’re not using a fees.yaml anymore
     );
 
-    return NextResponse.json(result);
+    return NextResponse.json(result, { status: 200 });
   } catch (e: any) {
-    console.error(e);
+    console.error("[/api/compute] error:", e);
     return NextResponse.json(
-      { error: e?.message ?? "Unknown error" },
+      { ok: false, error: e?.message ?? "Unknown error" },
       { status: 400 }
     );
   }
