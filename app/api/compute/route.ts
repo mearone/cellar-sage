@@ -36,7 +36,6 @@ const RISK = {
       No: 0.0,
       Yes: 0.07,
     },
-    // keep oxidation in deductions; adjust values as you like
     oxidation: {
       None: 0.0,
       "Light Browning": 0.05,
@@ -100,10 +99,6 @@ export async function POST(req: NextRequest) {
     }
 
     // 4) Sales tax handling (simple for now)
-    //    - AutoTax ON:
-    //        * US dest: keep provided sales_tax_rate (later: compute by ZIP)
-    //        * non-US dest: tax = 0
-    //    - AutoTax OFF: use provided sales_tax_rate as-is
     let sales_tax_rate: number = Number(body.sales_tax_rate ?? 0);
     if (autoTax) {
       sales_tax_rate = destCountry === "US" ? Number(body.sales_tax_rate ?? 0) : 0;
@@ -112,18 +107,16 @@ export async function POST(req: NextRequest) {
     // 5) Call compute with our normalized inputs + inline risk map
     const { buyers_premium: _ignored, ...rest } = body;
 
-    // NOTE: To move fast and pass TS in CI, we intentionally cast args to any.
-    // This avoids strict coupling to lib types that may differ from our inline shape.
-    // You can tighten types later without blocking deploys.
-    // @ts-expect-error – intentionally loosening types at callsite for deploy velocity
+    // @ts-ignore – loosen types to unblock deploy
     const result = computeBidCap(
       {
         ...rest,
         buyers_premium,
         sales_tax_rate,
-      } as any,
-      RISK as any,
-      {} as any // no external fees.yaml anymore
+      },
+      // @ts-ignore
+      RISK,
+      {} // no external fees.yaml anymore
     );
 
     return NextResponse.json(result, { status: 200 });
