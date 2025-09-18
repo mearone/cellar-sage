@@ -52,7 +52,7 @@ const RISK = {
   },
 } as const;
 
-// ---- Basic EU/VAT lists for auto-tax logic ----
+// ---- Country helpers ----
 const EU = new Set([
   "FR","DE","ES","IT","NL","BE","LU","DK","SE","FI",
   "IE","PT","AT","PL","CZ","HU","RO","BG","HR","SI","SK","GR",
@@ -66,11 +66,33 @@ const VAT: Record<string, number> = {
   GR: 0.24, EE: 0.22, LV: 0.21, LT: 0.21,
 };
 
+// Map common inputs to ISO-ish country codes
+function normalizeCountry(input: unknown): string {
+  const raw = String(input ?? "").trim().toUpperCase();
+  if (!raw) return "US";
+  if (raw === "USA" || raw === "UNITED STATES" || raw === "U.S." || raw === "UNITED STATES OF AMERICA") return "US";
+  if (raw.length > 2) {
+    // crude normalization for "FRANCE" -> FR, "GERMANY" -> DE, etc. (extend as needed)
+    const map: Record<string, string> = {
+      FRANCE: "FR", GERMANY: "DE", SPAIN: "ES", ITALY: "IT", NETHERLANDS: "NL",
+      BELGIUM: "BE", LUXEMBOURG: "LU", DENMARK: "DK", SWEDEN: "SE", FINLAND: "FI",
+      IRELAND: "IE", PORTUGAL: "PT", AUSTRIA: "AT", POLAND: "PL", CZECHIA: "CZ",
+      HUNGARY: "HU", ROMANIA: "RO", BULGARIA: "BG", CROATIA: "HR", SLOVENIA: "SI",
+      SLOVAKIA: "SK", GREECE: "GR", ESTONIA: "EE", LATVIA: "LV", LITHUANIA: "LT",
+      UNITED KINGDOM: "UK", GREAT BRITAIN: "UK", ENGLAND: "UK",
+      UNITED ARAB EMIRATES: "AE",
+      CANADA: "CA", MEXICO: "MX", AUSTRALIA: "AU", NEW ZEALAND: "NZ",
+    };
+    return map[raw] ?? raw;
+  }
+  return raw;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as any;
 
-    // 1) Always pull buyer’s premium from DB (ex-VAT for iDealwine)
+    // 1) Always pull buyer’s premium from DB (some houses store incl-VAT, some ex-VAT)
     const sb = supabaseServer();
     const { data: feeRow, error } = await sb
       .from("fees")
@@ -81,24 +103,39 @@ export async function POST(req: NextRequest) {
     if (error) throw new Error(error.message);
     if (!feeRow) throw new Error(`No fees found for house: ${body.auction_house}`);
 
-    const bpFromDb: number = feeRow.buyers_premium ?? 0;
+    const bpFromDb: number = Number(feeRow.buyers_premium ?? 0);
 
     // 2) Destination normalization
-    const destCountry: string = String(body.shipping_country || "US").toUpperCase();
+    const destCountry = normalizeCountry(body.shipping_country || "US");
     const autoTax: boolean = Boolean(body.auto_tax);
 
-    // 3) Compute effective buyer’s premium (iDealwine VAT if shipping inside EU)
+    // 3) Compute effective buyer’s premium for iDealwine
+    // iDealwine is based in FR (20% VAT). If AutoTax is ON:
+    //  - EU destination: BP should include destination VAT (we assume same % as dest)
+    //  - Non-EU: BP should be ex-VAT
+    // Heuristic: if bpFromDb > 0.24, we assume it's a VAT-inclusive value (e.g., 0.252)
     let buyers_premium = bpFromDb;
-    if (autoTax && body.auction_house === "iDealwine") {
-      if (EU.has(destCountry)) {
-        const vatRate = VAT[destCountry] ?? 0.20;
-        buyers_premium = bpFromDb * (1 + vatRate); // ex-VAT → incl-VAT on BP portion
+
+    if (body.auction_house === "iDealwine" && autoTax) {
+      const isEU = EU.has(destCountry);
+      const homeVat = 0.20; // iDealwine/FR base VAT
+      const looksInclVAT = bpFromDb > 0.24;
+      const destVat = VAT[destCountry] ?? homeVat;
+
+      if (isEU) {
+        // EU destination should be VAT-included BP
+        buyers_premium = looksInclVAT ? bpFromDb : bpFromDb * (1 + destVat);
       } else {
-        buyers_premium = bpFromDb; // ex-VAT for US/UK/non-EU
+        // Non-EU destination should be ex-VAT BP
+        buyers_premium = looksInclVAT ? bpFromDb / (1 + homeVat) : bpFromDb;
       }
     }
 
     // 4) Sales tax handling (simple for now)
+    //    - AutoTax ON:
+    //        * US dest: keep provided sales_tax_rate (later: compute by ZIP)
+    //        * non-US dest: tax = 0
+    //    - AutoTax OFF: use provided sales_tax_rate as-is
     let sales_tax_rate: number = Number(body.sales_tax_rate ?? 0);
     if (autoTax) {
       sales_tax_rate = destCountry === "US" ? Number(body.sales_tax_rate ?? 0) : 0;
